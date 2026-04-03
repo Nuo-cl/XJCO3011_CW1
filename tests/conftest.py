@@ -1,6 +1,6 @@
 import json
 import pytest
-from datetime import date, datetime
+from datetime import date
 
 from app import create_app, db as _db
 from app.models.user import User
@@ -62,16 +62,10 @@ def sample_paper(app, db):
 
 @pytest.fixture
 def auth_headers(client, sample_user):
-    """Register a user, log in, and return Authorization headers with JWT token.
-
-    Depends on auth routes being implemented. For Phase 1, returns empty dict.
-    Will be updated in Phase 2 when auth endpoints are ready.
-    """
-    # Phase 1 stub: once auth routes exist, this will do a real login
-    # For now, we create the token directly
-    from flask_jwt_extended import create_access_token
-    from flask import current_app
-
-    with current_app.app_context():
-        token = create_access_token(identity=sample_user.id)
-        return {'Authorization': f'Bearer {token}'}
+    """Log in the sample user and return JWT auth headers."""
+    resp = client.post('/api/auth/login', json={
+        'username': 'testuser',
+        'password': 'testpass123',
+    })
+    token = resp.get_json()['data']['access_token']
+    return {'Authorization': f'Bearer {token}'}
