@@ -121,6 +121,8 @@ JSON Web Tokens via flask-jwt-extended provide stateless authentication (Jones, 
 
 The ArxivService wraps the `arxiv` Python client to search and retrieve papers. Results are cached in the local SQLite database on first access, with the arXiv ID as the deduplication key (version suffixes like `v1`, `v2` are stripped). Paper abstracts are simultaneously indexed in ChromaDB for semantic search.
 
+The query builder (`_build_query`) constructs arXiv API queries by combining category filters, keyword terms, and date ranges into a single query string. Date constraints are embedded directly using arXiv's `submittedDate` field (e.g., `submittedDate:[202604020000 TO 202604042359]`), ensuring the API server handles filtering rather than fetching excess results and filtering locally. This approach was adopted after discovering that wildcard queries (`all:*`) combined with category-only filters caused intermittent HTTP 500 errors from the arXiv API.
+
 ### 4.2 Spaced Repetition — SM-2 Algorithm (F5)
 
 The SM2Service implements the SuperMemo 2 algorithm (Wozniak, 1990):
@@ -190,6 +192,12 @@ The lower coverage in `arxiv_service.py` (41%) reflects the difficulty of testin
 **Problem:** The arXiv API has strict rate limits (approximately 1 request per 3 seconds), which can cause timeouts during rapid development and testing.
 
 **Solution:** Implemented a local caching strategy — papers are stored in SQLite on first fetch and served from cache on subsequent requests. The `fetch_by_id` method checks the local database before making an API call, reducing external dependencies.
+
+### 6.4 arXiv Trending Query Instability
+
+**Problem:** The initial implementation of the trending papers feature used a wildcard query (`all:*`) with a category filter, relying on post-fetch Python-side date filtering. This caused intermittent HTTP 500 errors from the arXiv API, as the server struggled to process unbounded wildcard queries.
+
+**Solution:** Refactored the query builder to embed date constraints directly into the arXiv API query using the `submittedDate` field range syntax, and removed the wildcard term entirely. The trending endpoint now sends a precise, bounded query (e.g., `cat:cs.AI AND submittedDate:[202604020000 TO 202604042359]`), which the arXiv API handles reliably.
 
 ---
 

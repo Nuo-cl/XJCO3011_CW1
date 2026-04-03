@@ -56,13 +56,35 @@ class ArxivService:
             except Exception as e:
                 logger.warning('ChromaDB sync failed for paper %s: %s', paper.arxiv_id, e)
 
+    @staticmethod
+    def _build_query(query, category=None, date_from=None, date_to=None):
+        """Build an arXiv API query string with optional category and date filters."""
+        parts = []
+
+        if category:
+            parts.append(f'cat:{category}')
+
+        if query and query != '*':
+            parts.append(f'all:{query}')
+
+        # Embed date range directly in the arXiv query using submittedDate
+        if date_from or date_to:
+            start = date_from.replace('-', '') if date_from else '190001010000'
+            end = date_to.replace('-', '') + '2359' if date_to else '209912312359'
+            if len(start) == 8:
+                start += '0000'
+            parts.append(f'submittedDate:[{start} TO {end}]')
+
+        if not parts:
+            return query
+
+        return ' AND '.join(parts)
+
     @classmethod
     def search(cls, query, category=None, date_from=None, date_to=None,
                max_results=20, chromadb_service=None):
         """Search arXiv and cache results locally."""
-        search_query = query
-        if category:
-            search_query = f'cat:{category} AND all:{query}'
+        search_query = cls._build_query(query, category, date_from, date_to)
 
         client = arxiv.Client()
         search = arxiv.Search(
@@ -78,14 +100,6 @@ class ArxivService:
             papers.append(paper)
 
         db.session.commit()
-
-        # Filter by date range after caching
-        if date_from:
-            d = date.fromisoformat(date_from)
-            papers = [p for p in papers if p.published_date >= d]
-        if date_to:
-            d = date.fromisoformat(date_to)
-            papers = [p for p in papers if p.published_date <= d]
 
         # Sync to ChromaDB
         for paper in papers:
@@ -113,11 +127,14 @@ class ArxivService:
 
     @classmethod
     def trending(cls, category, days=7, max_results=20, chromadb_service=None):
-        """Get recent papers in a category."""
+        """Get recent papers in a category using date-range query."""
+        date_from = (date.today() - timedelta(days=days)).isoformat()
+        date_to = date.today().isoformat()
         return cls.search(
-            query='*',
+            query=None,
             category=category,
-            date_from=(date.today() - timedelta(days=days)).isoformat(),
+            date_from=date_from,
+            date_to=date_to,
             max_results=max_results,
             chromadb_service=chromadb_service,
         )
