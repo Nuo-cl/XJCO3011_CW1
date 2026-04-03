@@ -15,6 +15,7 @@ chroma_data/
 # Claude Code
 CLAUDE.md
 .claude/
+.mcp.json
 
 # IDE
 .vscode/

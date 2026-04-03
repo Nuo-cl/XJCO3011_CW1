@@ -121,7 +121,57 @@ def _process_note_results(results):
 
 @search_bp.route('/search/papers', methods=['POST'])
 def search_papers():
-    """Semantic search over paper abstracts (public, no auth required)."""
+    """Semantic search over paper abstracts using ChromaDB.
+    ---
+    tags:
+      - Semantic Search
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - query
+          properties:
+            query:
+              type: string
+              example: "transformer attention mechanism"
+            n_results:
+              type: integer
+              default: 10
+              description: Number of results to return (max 50)
+    responses:
+      200:
+        description: Semantic search results from paper abstracts
+        schema:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  arxiv_id:
+                    type: string
+                  title:
+                    type: string
+                  abstract:
+                    type: string
+                  relevance_score:
+                    type: number
+                    description: "Similarity score 0-1 (higher = more relevant)"
+                  type:
+                    type: string
+                    example: paper
+            query:
+              type: string
+            source:
+              type: string
+              example: paper_abstracts
+      400:
+        description: Missing or empty query field
+    """
     query, n_results = _parse_search_body(default_n=10)
 
     service = _chromadb()
@@ -145,7 +195,60 @@ def search_papers():
 @search_bp.route('/search/notes', methods=['POST'])
 @jwt_required()
 def search_notes():
-    """Semantic search over the current user's notes (auth required)."""
+    """Semantic search over the current user's notes.
+    ---
+    tags:
+      - Semantic Search
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - query
+          properties:
+            query:
+              type: string
+              example: "data augmentation techniques"
+            n_results:
+              type: integer
+              default: 5
+              description: Number of results to return (max 50)
+    responses:
+      200:
+        description: Semantic search results from user notes
+        schema:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  title:
+                    type: string
+                  content:
+                    type: string
+                  relevance_score:
+                    type: number
+                  type:
+                    type: string
+                    example: note
+            query:
+              type: string
+            source:
+              type: string
+              example: user_notes
+      400:
+        description: Missing or empty query field
+      401:
+        description: Missing or invalid JWT token
+    """
     uid = int(get_jwt_identity())
     query, n_results = _parse_search_body(default_n=5)
 
@@ -170,7 +273,54 @@ def search_notes():
 @search_bp.route('/search/all', methods=['POST'])
 @jwt_required()
 def search_all():
-    """Search across both papers and notes, merged by relevance (auth required)."""
+    """Search across both papers and notes, merged by relevance.
+    ---
+    tags:
+      - Semantic Search
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - query
+          properties:
+            query:
+              type: string
+              example: "attention mechanism improvements"
+            n_results:
+              type: integer
+              default: 10
+              description: Number of results per source (max 50)
+    responses:
+      200:
+        description: Combined results from papers and notes sorted by relevance
+        schema:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [paper, note]
+                  relevance_score:
+                    type: number
+            query:
+              type: string
+            source:
+              type: string
+              example: all
+      400:
+        description: Missing or empty query field
+      401:
+        description: Missing or invalid JWT token
+    """
     uid = int(get_jwt_identity())
     query, n_results = _parse_search_body(default_n=10)
 

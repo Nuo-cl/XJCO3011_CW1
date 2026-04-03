@@ -16,6 +16,14 @@ class BaseConfig:
         'version': '1.0.0',
         'termsOfService': '',
         'specs_route': '/apidocs/',
+        'securityDefinitions': {
+            'Bearer': {
+                'type': 'apiKey',
+                'name': 'Authorization',
+                'in': 'header',
+                'description': 'JWT Bearer token. Format: "Bearer {token}"',
+            },
+        },
     }
 
 

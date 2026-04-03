@@ -28,6 +28,53 @@ def _chromadb():
 
 @papers_bp.route('/papers/search', methods=['GET'])
 def search_papers():
+    """Search for papers on arXiv.
+    ---
+    tags:
+      - Paper Discovery
+    parameters:
+      - in: query
+        name: q
+        type: string
+        required: true
+        description: Search query string
+        example: transformer attention mechanism
+      - in: query
+        name: category
+        type: string
+        required: false
+        description: arXiv category filter
+        example: cs.AI
+      - in: query
+        name: date_from
+        type: string
+        required: false
+        description: Start date filter (YYYY-MM-DD)
+        example: "2025-01-01"
+      - in: query
+        name: date_to
+        type: string
+        required: false
+        description: End date filter (YYYY-MM-DD)
+        example: "2025-12-31"
+      - in: query
+        name: page
+        type: integer
+        required: false
+        default: 1
+        description: Page number
+      - in: query
+        name: per_page
+        type: integer
+        required: false
+        default: 20
+        description: Results per page (max 100)
+    responses:
+      200:
+        description: List of matching papers with pagination
+      400:
+        description: Missing required query parameter "q"
+    """
     q = request.args.get('q')
     if not q:
         raise APIError('Query parameter "q" is required.', 400)
@@ -80,6 +127,41 @@ def search_papers():
 
 @papers_bp.route('/papers/trending', methods=['GET'])
 def trending_papers():
+    """Get trending papers in an arXiv category.
+    ---
+    tags:
+      - Paper Discovery
+    parameters:
+      - in: query
+        name: category
+        type: string
+        required: true
+        description: arXiv category
+        example: cs.LG
+      - in: query
+        name: days
+        type: integer
+        required: false
+        default: 7
+        description: Number of days to look back
+      - in: query
+        name: page
+        type: integer
+        required: false
+        default: 1
+        description: Page number
+      - in: query
+        name: per_page
+        type: integer
+        required: false
+        default: 20
+        description: Results per page (max 100)
+    responses:
+      200:
+        description: List of trending papers with pagination
+      400:
+        description: Missing required query parameter "category"
+    """
     category = request.args.get('category')
     if not category:
         raise APIError('Query parameter "category" is required.', 400)
@@ -119,6 +201,23 @@ def trending_papers():
 
 @papers_bp.route('/papers/<arxiv_id>', methods=['GET'])
 def get_paper(arxiv_id):
+    """Get details of a specific paper by arXiv ID.
+    ---
+    tags:
+      - Paper Discovery
+    parameters:
+      - in: path
+        name: arxiv_id
+        type: string
+        required: true
+        description: The arXiv paper identifier
+        example: "2301.07041"
+    responses:
+      200:
+        description: Paper details (includes is_saved field if authenticated)
+      404:
+        description: Paper not found
+    """
     paper = ArxivService.fetch_by_id(arxiv_id, chromadb_service=_chromadb())
     if not paper:
         raise APIError(f"Paper with arxiv_id '{arxiv_id}' not found.", 404)
@@ -146,6 +245,36 @@ def get_paper(arxiv_id):
 @papers_bp.route('/papers/<arxiv_id>/save', methods=['POST'])
 @jwt_required()
 def save_paper(arxiv_id):
+    """Save a paper to the user's library.
+    ---
+    tags:
+      - Paper Management
+    security:
+      - Bearer: []
+    parameters:
+      - in: path
+        name: arxiv_id
+        type: string
+        required: true
+        description: The arXiv paper identifier
+        example: "2301.07041"
+      - in: body
+        name: body
+        required: false
+        schema:
+          type: object
+          properties:
+            memo:
+              type: string
+              example: Interesting approach to multi-head attention
+    responses:
+      201:
+        description: Paper saved successfully
+      404:
+        description: Paper not found
+      409:
+        description: Paper already saved
+    """
     uid = int(get_jwt_identity())
 
     paper = ArxivService.fetch_by_id(arxiv_id, chromadb_service=_chromadb())
@@ -181,6 +310,25 @@ def save_paper(arxiv_id):
 @papers_bp.route('/papers/<arxiv_id>/save', methods=['DELETE'])
 @jwt_required()
 def unsave_paper(arxiv_id):
+    """Remove a paper from the user's library.
+    ---
+    tags:
+      - Paper Management
+    security:
+      - Bearer: []
+    parameters:
+      - in: path
+        name: arxiv_id
+        type: string
+        required: true
+        description: The arXiv paper identifier
+        example: "2301.07041"
+    responses:
+      204:
+        description: Paper removed from library
+      404:
+        description: Paper not found in library
+    """
     uid = int(get_jwt_identity())
     paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
     if not paper:
@@ -198,6 +346,35 @@ def unsave_paper(arxiv_id):
 @papers_bp.route('/library', methods=['GET'])
 @jwt_required()
 def get_library():
+    """List all papers in the user's library.
+    ---
+    tags:
+      - Paper Management
+    security:
+      - Bearer: []
+    parameters:
+      - in: query
+        name: tag
+        type: string
+        required: false
+        description: Filter by tag name
+        example: deep-learning
+      - in: query
+        name: page
+        type: integer
+        required: false
+        default: 1
+        description: Page number
+      - in: query
+        name: per_page
+        type: integer
+        required: false
+        default: 20
+        description: Results per page (max 100)
+    responses:
+      200:
+        description: Paginated list of saved papers
+    """
     uid = int(get_jwt_identity())
     tag_filter = request.args.get('tag')
     page = request.args.get('page', 1, type=int)
@@ -263,6 +440,40 @@ def get_library():
 @papers_bp.route('/library/<arxiv_id>/tags', methods=['POST'])
 @jwt_required()
 def add_tags(arxiv_id):
+    """Add tags to a saved paper.
+    ---
+    tags:
+      - Paper Management
+    security:
+      - Bearer: []
+    parameters:
+      - in: path
+        name: arxiv_id
+        type: string
+        required: true
+        description: The arXiv paper identifier
+        example: "2301.07041"
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - tags
+          properties:
+            tags:
+              type: array
+              items:
+                type: string
+              example: ["deep-learning", "transformers"]
+    responses:
+      200:
+        description: Updated list of tags on the paper
+      400:
+        description: Invalid request body or tags not a list
+      404:
+        description: Paper not found or not in library
+    """
     uid = int(get_jwt_identity())
     paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
     if not paper:
@@ -305,6 +516,31 @@ def add_tags(arxiv_id):
 @papers_bp.route('/library/<arxiv_id>/tags/<tag_name>', methods=['DELETE'])
 @jwt_required()
 def remove_tag(arxiv_id, tag_name):
+    """Remove a tag from a saved paper.
+    ---
+    tags:
+      - Paper Management
+    security:
+      - Bearer: []
+    parameters:
+      - in: path
+        name: arxiv_id
+        type: string
+        required: true
+        description: The arXiv paper identifier
+        example: "2301.07041"
+      - in: path
+        name: tag_name
+        type: string
+        required: true
+        description: Name of the tag to remove
+        example: deep-learning
+    responses:
+      204:
+        description: Tag removed from paper
+      404:
+        description: Paper, library entry, or tag not found
+    """
     uid = int(get_jwt_identity())
     paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
     if not paper:
@@ -330,6 +566,16 @@ def remove_tag(arxiv_id, tag_name):
 @papers_bp.route('/tags', methods=['GET'])
 @jwt_required()
 def get_tags():
+    """List all tags created by the user.
+    ---
+    tags:
+      - Paper Management
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of tags with paper counts
+    """
     uid = int(get_jwt_identity())
     tags = Tag.query.filter_by(user_id=uid).all()
 

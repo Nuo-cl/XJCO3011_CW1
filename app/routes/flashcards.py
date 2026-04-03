@@ -26,6 +26,44 @@ def _flashcard_response(card):
 @flashcards_bp.route('/flashcards', methods=['POST'])
 @jwt_required()
 def create_flashcard():
+    """Create a new flashcard linked to a note.
+    ---
+    tags:
+      - Flashcards
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - note_id
+            - question
+            - answer
+          properties:
+            note_id:
+              type: integer
+              example: 1
+            question:
+              type: string
+              example: "What is Multi-Head Attention?"
+            answer:
+              type: string
+              example: "A mechanism that runs multiple attention functions in parallel."
+    responses:
+      201:
+        description: Flashcard created successfully
+      400:
+        description: Missing required fields
+      401:
+        description: Missing or invalid JWT token
+      403:
+        description: Note does not belong to current user
+      404:
+        description: Note not found
+    """
     uid = int(get_jwt_identity())
     data = request.get_json(silent=True)
     validate_required_fields(data, ['note_id', 'question', 'answer'])
@@ -53,6 +91,32 @@ def create_flashcard():
 @flashcards_bp.route('/flashcards', methods=['GET'])
 @jwt_required()
 def list_flashcards():
+    """List all flashcards for the current user.
+    ---
+    tags:
+      - Flashcards
+    security:
+      - Bearer: []
+    parameters:
+      - name: note_id
+        in: query
+        type: integer
+        required: false
+        description: Filter by note ID
+      - name: page
+        in: query
+        type: integer
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        default: 20
+    responses:
+      200:
+        description: Paginated list of flashcards
+      401:
+        description: Missing or invalid JWT token
+    """
     uid = int(get_jwt_identity())
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
@@ -85,6 +149,36 @@ def list_flashcards():
 @flashcards_bp.route('/notes/<int:note_id>/flashcards', methods=['GET'])
 @jwt_required()
 def list_note_flashcards(note_id):
+    """List flashcards for a specific note.
+    ---
+    tags:
+      - Flashcards
+    security:
+      - Bearer: []
+    parameters:
+      - name: note_id
+        in: path
+        type: integer
+        required: true
+        description: Note ID
+      - name: page
+        in: query
+        type: integer
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        default: 20
+    responses:
+      200:
+        description: Paginated list of flashcards for the note
+      401:
+        description: Missing or invalid JWT token
+      403:
+        description: Note does not belong to current user
+      404:
+        description: Note not found
+    """
     uid = int(get_jwt_identity())
     note = db.session.get(Note, note_id)
     if not note:
@@ -117,6 +211,42 @@ def list_note_flashcards(note_id):
 @flashcards_bp.route('/flashcards/<int:card_id>', methods=['PUT'])
 @jwt_required()
 def update_flashcard(card_id):
+    """Update a flashcard's question or answer.
+    ---
+    tags:
+      - Flashcards
+    security:
+      - Bearer: []
+    parameters:
+      - name: card_id
+        in: path
+        type: integer
+        required: true
+        description: Flashcard ID
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            question:
+              type: string
+              example: "Updated question?"
+            answer:
+              type: string
+              example: "Updated answer."
+    responses:
+      200:
+        description: Flashcard updated successfully
+      400:
+        description: Request body is required
+      401:
+        description: Missing or invalid JWT token
+      403:
+        description: Flashcard does not belong to current user
+      404:
+        description: Flashcard not found
+    """
     uid = int(get_jwt_identity())
     card = db.session.get(Flashcard, card_id)
     if not card:
@@ -143,6 +273,28 @@ def update_flashcard(card_id):
 @flashcards_bp.route('/flashcards/<int:card_id>', methods=['DELETE'])
 @jwt_required()
 def delete_flashcard(card_id):
+    """Delete a flashcard.
+    ---
+    tags:
+      - Flashcards
+    security:
+      - Bearer: []
+    parameters:
+      - name: card_id
+        in: path
+        type: integer
+        required: true
+        description: Flashcard ID
+    responses:
+      204:
+        description: Flashcard deleted successfully
+      401:
+        description: Missing or invalid JWT token
+      403:
+        description: Flashcard does not belong to current user
+      404:
+        description: Flashcard not found
+    """
     uid = int(get_jwt_identity())
     card = db.session.get(Flashcard, card_id)
     if not card:
@@ -158,6 +310,27 @@ def delete_flashcard(card_id):
 @flashcards_bp.route('/flashcards/due', methods=['GET'])
 @jwt_required()
 def get_due_flashcards():
+    """Get flashcards due for review today.
+    ---
+    tags:
+      - Spaced Repetition
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of due flashcards with total count
+        schema:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: object
+            total_due:
+              type: integer
+      401:
+        description: Missing or invalid JWT token
+    """
     uid = int(get_jwt_identity())
     now = datetime.utcnow()
 
@@ -175,6 +348,67 @@ def get_due_flashcards():
 @flashcards_bp.route('/flashcards/<int:card_id>/review', methods=['POST'])
 @jwt_required()
 def review_flashcard(card_id):
+    """Submit a review rating for a flashcard (SM-2 spaced repetition).
+    ---
+    tags:
+      - Spaced Repetition
+    security:
+      - Bearer: []
+    parameters:
+      - name: card_id
+        in: path
+        type: integer
+        required: true
+        description: Flashcard ID
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - rating
+          properties:
+            rating:
+              type: integer
+              minimum: 0
+              maximum: 5
+              example: 4
+              description: "SM-2 rating: 0=forgot completely, 5=perfect recall"
+    responses:
+      200:
+        description: Review recorded, returns updated SM-2 parameters
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                flashcard_id:
+                  type: integer
+                rating:
+                  type: integer
+                updated:
+                  type: object
+                  properties:
+                    ease_factor:
+                      type: number
+                    interval:
+                      type: integer
+                    repetitions:
+                      type: integer
+                    next_review_at:
+                      type: string
+                reviewed_at:
+                  type: string
+      400:
+        description: Rating must be an integer between 0 and 5
+      401:
+        description: Missing or invalid JWT token
+      403:
+        description: Flashcard does not belong to current user
+      404:
+        description: Flashcard not found
+    """
     uid = int(get_jwt_identity())
     card = db.session.get(Flashcard, card_id)
     if not card:
@@ -223,6 +457,55 @@ def review_flashcard(card_id):
 @flashcards_bp.route('/review/stats', methods=['GET'])
 @jwt_required()
 def review_stats():
+    """Get spaced repetition review statistics.
+    ---
+    tags:
+      - Spaced Repetition
+    security:
+      - Bearer: []
+    parameters:
+      - name: period
+        in: query
+        type: string
+        enum: [week, month, all]
+        default: week
+        description: Statistics time period
+    responses:
+      200:
+        description: Review statistics
+        schema:
+          type: object
+          properties:
+            data:
+              type: object
+              properties:
+                total_cards:
+                  type: integer
+                due_today:
+                  type: integer
+                mastered:
+                  type: integer
+                  description: "Cards with ease_factor >= 2.5 and interval >= 21"
+                learning:
+                  type: integer
+                reviews_in_period:
+                  type: integer
+                average_rating:
+                  type: number
+                daily_reviews:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      date:
+                        type: string
+                      count:
+                        type: integer
+                      avg_rating:
+                        type: number
+      401:
+        description: Missing or invalid JWT token
+    """
     uid = int(get_jwt_identity())
     period = request.args.get('period', 'week')
 
