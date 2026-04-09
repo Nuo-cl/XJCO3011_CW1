@@ -9,7 +9,7 @@ Usage:
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from mcp.server.fastmcp import FastMCP
 
@@ -50,13 +50,17 @@ def search_papers(query: str, category: str = None, days: int = 30) -> str:
         days: Only return papers from the last N days. Default 30.
     """
     with _get_app().app_context():
+        date_from = (date.today() - timedelta(days=days)).isoformat()
+        date_to = date.today().isoformat()
         papers = ArxivService.search(
             query=query,
             category=category,
+            date_from=date_from,
+            date_to=date_to,
             max_results=10,
             chromadb_service=_chromadb(),
         )
-        results = [p.to_dict() for p in papers[:10]]
+        results = [p.to_dict() for p in papers]
         return json.dumps(results, indent=2)
 
 
@@ -75,7 +79,7 @@ def get_trending_papers(category: str, days: int = 7) -> str:
             max_results=10,
             chromadb_service=_chromadb(),
         )
-        results = [p.to_dict() for p in papers[:10]]
+        results = [p.to_dict() for p in papers]
         return json.dumps(results, indent=2)
 
 

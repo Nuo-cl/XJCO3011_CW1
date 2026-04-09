@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import date, datetime, timedelta
+from itertools import islice
 
 import arxiv
 
@@ -12,6 +13,11 @@ logger = logging.getLogger(__name__)
 
 class ArxivService:
     """Wrapper for arXiv API: search, fetch, cache, and ChromaDB sync."""
+
+    # Reuse a single client to avoid repeated handshake overhead.
+    # delay_seconds is the polite wait between paged requests; 1.0s is within
+    # arXiv's fair-use guidelines while being faster than the 3.0s default.
+    _client = arxiv.Client(page_size=20, delay_seconds=1.0, num_retries=3)
 
     @staticmethod
     def _paper_from_result(result):
@@ -76,26 +82,37 @@ class ArxivService:
             parts.append(f'submittedDate:[{start} TO {end}]')
 
         if not parts:
-            return query
+            # Wrap bare query consistently with all: prefix
+            return f'all:{query}' if query else 'all:*'
 
         return ' AND '.join(parts)
 
+    # Maximum number of results to fetch from arXiv in a single request
+    MAX_ARXIV_FETCH = 100
+
     @classmethod
     def search(cls, query, category=None, date_from=None, date_to=None,
-               max_results=20, chromadb_service=None):
-        """Search arXiv and cache results locally."""
+               max_results=20, offset=0, chromadb_service=None):
+        """Search arXiv and cache results locally.
+
+        Args:
+            offset: Number of results to skip (for pagination).
+            max_results: Number of results to return (after skipping).
+        """
         search_query = cls._build_query(query, category, date_from, date_to)
 
-        client = arxiv.Client()
+        # Cap total fetch to avoid over-requesting from arXiv
+        fetch_count = min(offset + max_results, cls.MAX_ARXIV_FETCH)
+
         search = arxiv.Search(
             query=search_query,
-            max_results=max_results,
+            max_results=fetch_count,
             sort_by=arxiv.SortCriterion.SubmittedDate,
             sort_order=arxiv.SortOrder.Descending,
         )
 
         papers = []
-        for result in client.results(search):
+        for result in islice(cls._client.results(search), offset, offset + max_results):
             paper = cls._paper_from_result(result)
             papers.append(paper)
 
@@ -114,9 +131,8 @@ class ArxivService:
         if existing:
             return existing
 
-        client = arxiv.Client()
         search = arxiv.Search(id_list=[arxiv_id])
-        results = list(client.results(search))
+        results = list(cls._client.results(search))
         if not results:
             return None
 
@@ -126,7 +142,7 @@ class ArxivService:
         return paper
 
     @classmethod
-    def trending(cls, category, days=7, max_results=20, chromadb_service=None):
+    def trending(cls, category, days=7, max_results=20, offset=0, chromadb_service=None):
         """Get recent papers in a category using date-range query."""
         date_from = (date.today() - timedelta(days=days)).isoformat()
         date_to = date.today().isoformat()
@@ -136,5 +152,6 @@ class ArxivService:
             date_from=date_from,
             date_to=date_to,
             max_results=max_results,
+            offset=offset,
             chromadb_service=chromadb_service,
         )

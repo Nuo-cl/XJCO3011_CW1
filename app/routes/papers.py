@@ -1,3 +1,5 @@
+import re
+
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 
@@ -6,6 +8,8 @@ from app.models.paper import Paper, UserPaper, Tag, UserPaperTag
 from app.services.arxiv_service import ArxivService
 from app.utils.errors import APIError
 from app.utils.validators import validate_required_fields
+
+_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 
 papers_bp = Blueprint('papers', __name__, url_prefix='/api')
 
@@ -82,24 +86,31 @@ def search_papers():
     category = request.args.get('category')
     date_from = request.args.get('date_from')
     date_to = request.args.get('date_to')
+
+    # Validate date format (YYYY-MM-DD)
+    if date_from and not _DATE_RE.match(date_from):
+        raise APIError('date_from must be in YYYY-MM-DD format.', 400)
+    if date_to and not _DATE_RE.match(date_to):
+        raise APIError('date_to must be in YYYY-MM-DD format.', 400)
+
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     per_page = min(per_page, 100)
 
+    offset = (page - 1) * per_page
     papers = ArxivService.search(
         query=q,
         category=category,
         date_from=date_from,
         date_to=date_to,
-        max_results=page * per_page,
+        max_results=per_page,
+        offset=offset,
         chromadb_service=_chromadb(),
     )
 
-    # Manual pagination over the list
-    total = len(papers)
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_items = papers[start:end]
+    # Papers returned are already the current page
+    total = offset + len(papers)
+    page_items = papers
     pages = (total + per_page - 1) // per_page if total else 1
 
     data = []
@@ -171,17 +182,17 @@ def trending_papers():
     per_page = request.args.get('per_page', 20, type=int)
     per_page = min(per_page, 100)
 
+    offset = (page - 1) * per_page
     papers = ArxivService.trending(
         category=category,
         days=days,
-        max_results=page * per_page,
+        max_results=per_page,
+        offset=offset,
         chromadb_service=_chromadb(),
     )
 
-    total = len(papers)
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_items = papers[start:end]
+    total = offset + len(papers)
+    page_items = papers
     pages = (total + per_page - 1) // per_page if total else 1
 
     data = []
