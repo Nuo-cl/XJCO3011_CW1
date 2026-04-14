@@ -19,8 +19,7 @@ class User(db.Model):
     saved_papers = db.relationship('UserPaper', backref='user', cascade='all, delete-orphan', lazy='dynamic')
     notes = db.relationship('Note', backref='user', cascade='all, delete-orphan', lazy='dynamic')
     tags = db.relationship('Tag', backref='user', cascade='all, delete-orphan', lazy='dynamic')
-    flashcards = db.relationship('Flashcard', backref='user', cascade='all, delete-orphan', lazy='dynamic')
-    review_logs = db.relationship('ReviewLog', backref='user', cascade='all, delete-orphan', lazy='dynamic')
+
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

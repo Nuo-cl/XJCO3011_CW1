@@ -28,14 +28,14 @@ def create_app(config_name='development'):
     from app.routes.auth import auth_bp
     from app.routes.papers import papers_bp
     from app.routes.notes import notes_bp
-    from app.routes.flashcards import flashcards_bp
     from app.routes.search import search_bp
+    from app.routes.recommendations import recommendations_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(papers_bp)
     app.register_blueprint(notes_bp)
-    app.register_blueprint(flashcards_bp)
     app.register_blueprint(search_bp)
+    app.register_blueprint(recommendations_bp)
 
     from app.utils.errors import register_error_handlers
     register_error_handlers(app)

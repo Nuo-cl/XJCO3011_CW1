@@ -21,7 +21,6 @@ def _note_response(note):
     links = {
         'self': f'/api/notes/{note.id}',
         'paper': f'/api/papers/{note.paper.arxiv_id}',
-        'flashcards': f'/api/notes/{note.id}/flashcards',
     }
     data['_links'] = links
     return data

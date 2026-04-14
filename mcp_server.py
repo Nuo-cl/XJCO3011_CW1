@@ -18,9 +18,8 @@ from app import create_app, db
 from app.models.user import User
 from app.models.paper import Paper, UserPaper
 from app.models.note import Note
-from app.models.flashcard import Flashcard, ReviewLog
 from app.services.arxiv_service import ArxivService
-from app.services.sm2_service import SM2Service
+from app.services.recommendation_service import RecommendationService
 
 mcp = FastMCP("ScholarTrack")
 
@@ -262,59 +261,46 @@ def search_knowledge(query: str) -> str:
 
 
 @mcp.tool()
-def get_due_flashcards() -> str:
-    """Get flashcards that are due for review today."""
+def get_daily_recommendations() -> str:
+    """Get personalized daily paper recommendations based on your interests and library."""
     with _get_app().app_context():
-        now = datetime.utcnow()
-        cards = Flashcard.query.filter(
-            Flashcard.user_id == _user_id,
-            Flashcard.next_review_at <= now,
-        ).order_by(Flashcard.next_review_at.asc()).limit(20).all()
+        user = db.session.get(User, _user_id)
+        if not user:
+            return json.dumps({'error': 'User not found.'})
 
-        results = []
-        for card in cards:
-            results.append({
-                'id': card.id,
-                'question': card.question,
-                'answer': card.answer,
-                'ease_factor': card.ease_factor,
-                'interval': card.interval,
-            })
-        return json.dumps(results, indent=2)
+        try:
+            papers, strategy = RecommendationService.daily_recommendations(
+                user=user,
+                chromadb_service=_chromadb(),
+            )
+        except Exception as e:
+            return json.dumps({'error': str(e)})
+
+        results = [p.to_dict() for p in papers]
+        return json.dumps({
+            'strategy': strategy,
+            'count': len(results),
+            'data': results,
+        }, indent=2)
 
 
 @mcp.tool()
-def review_flashcard(flashcard_id: int, rating: int) -> str:
-    """Submit a review rating for a flashcard (SM-2 spaced repetition).
+def discover_papers(category: str, days: int = 7) -> str:
+    """Discover random papers in an arXiv category for serendipitous browsing.
 
     Args:
-        flashcard_id: The ID of the flashcard to review.
-        rating: Score from 0-5 (0=forgot completely, 5=perfect recall).
+        category: arXiv category (e.g. "cs.CV", "cs.CL", "cs.AI").
+        days: Look back window in days. Default 7.
     """
     with _get_app().app_context():
-        card = db.session.get(Flashcard, flashcard_id)
-        if not card or card.user_id != _user_id:
-            return json.dumps({'error': 'Flashcard not found.'})
-
-        if rating < 0 or rating > 5:
-            return json.dumps({'error': 'Rating must be 0-5.'})
-
-        updated = SM2Service.review(card, rating)
-        card.ease_factor = updated['ease_factor']
-        card.interval = updated['interval']
-        card.repetitions = updated['repetitions']
-        card.next_review_at = updated['next_review_at']
-
-        log = ReviewLog(user_id=_user_id, flashcard_id=card.id, rating=rating)
-        db.session.add(log)
-        db.session.commit()
-
-        return json.dumps({
-            'message': 'Review recorded.',
-            'next_review_at': card.next_review_at.isoformat(),
-            'interval': card.interval,
-            'ease_factor': card.ease_factor,
-        })
+        papers = RecommendationService.discover_random(
+            category=category,
+            days=days,
+            count=5,
+            chromadb_service=_chromadb(),
+        )
+        results = [p.to_dict() for p in papers]
+        return json.dumps(results, indent=2)
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_req
 from app import db
 from app.models.paper import Paper, UserPaper, Tag, UserPaperTag
 from app.services.arxiv_service import ArxivService
+from app.services.recommendation_service import RecommendationService
 from app.utils.errors import APIError
 from app.utils.validators import validate_required_fields
 
@@ -206,6 +207,68 @@ def trending_papers():
         'pagination': {'total': total, 'page': page, 'per_page': per_page, 'pages': pages},
         '_links': {
             'self': f'/api/papers/trending?category={category}&page={page}&per_page={per_page}',
+        },
+    }), 200
+
+
+@papers_bp.route('/papers/discover', methods=['GET'])
+def discover_papers():
+    """Discover random papers in an arXiv category for serendipitous browsing.
+    ---
+    tags:
+      - Paper Discovery
+    parameters:
+      - in: query
+        name: category
+        type: string
+        required: true
+        description: arXiv category
+        example: cs.AI
+      - in: query
+        name: days
+        type: integer
+        required: false
+        default: 7
+        description: Number of days to look back
+      - in: query
+        name: count
+        type: integer
+        required: false
+        default: 5
+        description: Number of papers to return (max 10)
+    responses:
+      200:
+        description: Random subset of recent papers
+      400:
+        description: Missing required query parameter "category"
+    """
+    category = request.args.get('category')
+    if not category:
+        raise APIError('Query parameter "category" is required.', 400)
+
+    days = request.args.get('days', 7, type=int)
+    count = request.args.get('count', 5, type=int)
+    count = min(count, 10)
+
+    papers = RecommendationService.discover_random(
+        category=category,
+        days=days,
+        count=count,
+        chromadb_service=_chromadb(),
+    )
+
+    data = []
+    for p in papers:
+        d = p.to_dict()
+        d['_links'] = _paper_links(p.arxiv_id)
+        data.append(d)
+
+    return jsonify({
+        'data': data,
+        'category': category,
+        'count': len(data),
+        '_links': {
+            'self': f'/api/papers/discover?category={category}&days={days}&count={count}',
         },
     }), 200
 

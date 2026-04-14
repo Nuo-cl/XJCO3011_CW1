@@ -17,7 +17,6 @@ class Note(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     paper = db.relationship('Paper', lazy='joined')
-    flashcards = db.relationship('Flashcard', backref='note', cascade='all, delete-orphan', lazy='dynamic')
 
     def to_dict(self):
         return {
