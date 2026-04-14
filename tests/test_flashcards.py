@@ -5,10 +5,10 @@ from datetime import datetime
 
 
 @pytest.fixture
-def sample_note(client, auth_headers):
+def sample_note(client, auth_headers, sample_paper):
     """Create a note for flashcard tests."""
     resp = client.post('/api/notes', headers=auth_headers, json={
-        'title': 'Flashcard Test Note',
+        'paper_id': sample_paper.arxiv_id,
         'content': 'Content for flashcard tests.',
     })
     return resp.get_json()['data']

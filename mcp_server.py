@@ -127,22 +127,23 @@ def list_library() -> str:
 
 
 @mcp.tool()
-def create_note(title: str, content: str, arxiv_id: str = None) -> str:
-    """Create a research note, optionally linked to a paper.
+def create_note(arxiv_id: str, content: str) -> str:
+    """Create a short insight note linked to a paper (max 1000 characters).
 
     Args:
-        title: Note title.
-        content: Note content (Markdown supported).
-        arxiv_id: Optional arXiv paper ID to link the note to.
+        arxiv_id: arXiv paper ID to link the note to (required).
+        content: Insight content (max 1000 characters).
     """
     with _get_app().app_context():
-        paper_id = None
-        if arxiv_id:
-            paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
-            if paper:
-                paper_id = paper.id
+        from app.models.note import NOTE_MAX_LENGTH
+        if len(content) > NOTE_MAX_LENGTH:
+            return json.dumps({'error': f'Content exceeds {NOTE_MAX_LENGTH} characters.'})
 
-        note = Note(user_id=_user_id, paper_id=paper_id, title=title, content=content)
+        paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
+        if not paper:
+            return json.dumps({'error': f'Paper {arxiv_id} not found.'})
+
+        note = Note(user_id=_user_id, paper_id=paper.id, content=content)
         db.session.add(note)
         db.session.commit()
 
@@ -155,15 +156,19 @@ def create_note(title: str, content: str, arxiv_id: str = None) -> str:
                     content=content,
                     metadata={
                         'user_id': _user_id,
-                        'title': title,
-                        'paper_id': arxiv_id or '',
+                        'paper_id': arxiv_id,
                         'created_at': note.created_at.isoformat(),
                     },
                 )
             except Exception:
                 pass
 
-        return json.dumps({'message': 'Note created.', 'id': note.id, 'title': title})
+        return json.dumps({
+            'message': 'Note created.',
+            'id': note.id,
+            'arxiv_id': arxiv_id,
+            'preview': content[:100],
+        })
 
 
 @mcp.tool()
@@ -192,8 +197,8 @@ def search_notes(query: str) -> str:
                     if note:
                         items.append({
                             'id': note.id,
-                            'title': note.title,
-                            'content': note.content[:200],
+                            'preview': note.content[:100],
+                            'arxiv_id': note.paper.arxiv_id if note.paper else None,
                             'relevance_score': round(max(0, 1 - distance), 4),
                         })
                 except (ValueError, AttributeError):
@@ -245,7 +250,8 @@ def search_knowledge(query: str) -> str:
                         items.append({
                             'type': 'note',
                             'id': note.id,
-                            'title': note.title,
+                            'preview': note.content[:100],
+                            'arxiv_id': note.paper.arxiv_id if note.paper else None,
                             'relevance_score': round(max(0, 1 - distance), 4),
                         })
                 except (ValueError, AttributeError):

@@ -40,20 +40,18 @@ def _build_paper_result(paper, distance):
 def _build_note_result(note, distance):
     """Build a single note search result dict."""
     relevance_score = round(_clamp(1.0 - distance), 4)
-    result = {
+    return {
         'id': note.id,
-        'title': note.title,
+        'preview': note.content[:100] + ('...' if len(note.content) > 100 else ''),
         'content': note.content,
-        'paper_id': note.paper.arxiv_id if note.paper else None,
+        'arxiv_id': note.paper.arxiv_id,
         'relevance_score': relevance_score,
         'type': 'note',
         '_links': {
             'self': f'/api/notes/{note.id}',
+            'paper': f'/api/papers/{note.paper.arxiv_id}',
         },
     }
-    if note.paper:
-        result['_links']['paper'] = f'/api/papers/{note.paper.arxiv_id}'
-    return result
 
 
 def _parse_search_body(default_n=10):

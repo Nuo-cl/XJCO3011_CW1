@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app import db
 from app.models.paper import Paper
-from app.models.note import Note
+from app.models.note import Note, NOTE_MAX_LENGTH
 from app.utils.errors import APIError
 from app.utils.validators import validate_required_fields
 
@@ -17,16 +17,12 @@ def _chromadb():
 def _note_response(note):
     """Build a single note response dict with HATEOAS links."""
     data = note.to_dict()
-    if note.paper:
-        data['paper_title'] = note.paper.title
+    data['paper_title'] = note.paper.title
     links = {
         'self': f'/api/notes/{note.id}',
+        'paper': f'/api/papers/{note.paper.arxiv_id}',
         'flashcards': f'/api/notes/{note.id}/flashcards',
     }
-    if note.paper_id:
-        paper = note.paper
-        if paper:
-            links['paper'] = f'/api/papers/{paper.arxiv_id}'
     data['_links'] = links
     return data
 
@@ -45,8 +41,7 @@ def _sync_note_to_chromadb(note, delete=False):
                 content=note.content,
                 metadata={
                     'user_id': note.user_id,
-                    'title': note.title,
-                    'paper_id': note.paper.arxiv_id if note.paper else '',
+                    'paper_id': note.paper.arxiv_id,
                     'created_at': note.created_at.isoformat(),
                 },
             )
@@ -54,10 +49,19 @@ def _sync_note_to_chromadb(note, delete=False):
         pass  # non-critical
 
 
+def _validate_content(content):
+    """Validate note content length."""
+    if len(content) > NOTE_MAX_LENGTH:
+        raise APIError(
+            f'Content exceeds maximum length of {NOTE_MAX_LENGTH} characters.',
+            400,
+        )
+
+
 @notes_bp.route('/notes', methods=['POST'])
 @jwt_required()
 def create_note():
-    """Create a new research note.
+    """Create a new insight note linked to a paper.
     ---
     tags:
       - Notes
@@ -70,43 +74,38 @@ def create_note():
         schema:
           type: object
           required:
-            - title
+            - paper_id
             - content
           properties:
-            title:
-              type: string
-              example: Key findings on attention mechanisms
-            content:
-              type: string
-              example: The paper demonstrates that multi-head attention can be pruned without significant performance loss.
             paper_id:
               type: string
-              description: arXiv ID to link the note to a paper
+              description: arXiv ID to link the note to (required)
               example: "2301.07041"
+            content:
+              type: string
+              description: Insight content (max 1000 characters)
+              example: The paper shows multi-head attention can be pruned without significant performance loss.
     responses:
       201:
         description: Note created successfully
       400:
-        description: Missing required fields
+        description: Missing required fields or content too long
       404:
         description: Linked paper not found
     """
     uid = int(get_jwt_identity())
     data = request.get_json(silent=True)
-    validate_required_fields(data, ['title', 'content'])
+    validate_required_fields(data, ['paper_id', 'content'])
+    _validate_content(data['content'])
 
-    paper_id = None
-    arxiv_id = data.get('paper_id')  # API spec uses arxiv_id in the field "paper_id"
-    if arxiv_id:
-        paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
-        if not paper:
-            raise APIError(f"Paper with arxiv_id '{arxiv_id}' not found.", 404)
-        paper_id = paper.id
+    arxiv_id = data['paper_id']
+    paper = Paper.query.filter_by(arxiv_id=arxiv_id).first()
+    if not paper:
+        raise APIError(f"Paper with arxiv_id '{arxiv_id}' not found.", 404)
 
     note = Note(
         user_id=uid,
-        paper_id=paper_id,
-        title=data['title'],
+        paper_id=paper.id,
         content=data['content'],
     )
     db.session.add(note)
@@ -116,7 +115,6 @@ def create_note():
 
     return jsonify({
         'data': _note_response(note),
-        '_links': _note_response(note).get('_links', {}),
     }), 201
 
 
@@ -318,17 +316,15 @@ def update_note(note_id):
         schema:
           type: object
           properties:
-            title:
-              type: string
-              example: Updated title on attention mechanisms
             content:
               type: string
+              description: Updated insight content (max 1000 characters)
               example: Revised findings after reading the supplementary material.
     responses:
       200:
         description: Note updated successfully
       400:
-        description: Request body is required
+        description: Request body is required or content too long
       403:
         description: Access denied
       404:
@@ -346,9 +342,8 @@ def update_note(note_id):
     if not data:
         raise APIError('Request body is required.', 400)
 
-    if 'title' in data:
-        note.title = data['title']
     if 'content' in data:
+        _validate_content(data['content'])
         note.content = data['content']
 
     db.session.commit()
