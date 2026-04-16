@@ -21,14 +21,18 @@ class RecommendationService:
         """Generate daily paper recommendations for a user.
 
         Returns:
-            Tuple of (list[Paper], strategy_name).
+            Tuple of (list[Paper], strategy_name, metadata_dict).
+            metadata_dict contains extra context such as saved_count.
         """
         saved_count = UserPaper.query.filter_by(user_id=user.id).count()
+        meta = {'saved_count': saved_count}
 
         if saved_count == 0:
-            return cls._cold_start(user, chromadb_service)
+            papers, strategy = cls._cold_start(user, chromadb_service)
         else:
-            return cls._warm_start(user, chromadb_service)
+            papers, strategy = cls._warm_start(user, chromadb_service)
+
+        return papers, strategy, meta
 
     @classmethod
     def _cold_start(cls, user, chromadb_service):

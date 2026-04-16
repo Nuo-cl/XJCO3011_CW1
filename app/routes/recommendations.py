@@ -53,7 +53,7 @@ def daily_recommendations():
     uid = int(get_jwt_identity())
     user = db.session.get(User, uid)
 
-    papers, strategy = RecommendationService.daily_recommendations(
+    papers, strategy, _meta = RecommendationService.daily_recommendations(
         user=user,
         chromadb_service=_chromadb(),
     )

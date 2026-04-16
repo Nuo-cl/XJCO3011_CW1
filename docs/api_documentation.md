@@ -14,7 +14,7 @@
 3. [F2: Paper Discovery](#3-f2-paper-discovery)
 4. [F3: Paper Management](#4-f3-paper-management)
 5. [F4: Notes](#5-f4-notes)
-6. [F5: Flashcards & Spaced Repetition](#6-f5-flashcards--spaced-repetition)
+6. [F5: Recommendations & Discovery](#6-f5-recommendations--discovery)
 7. [F6: Semantic Search](#7-f6-semantic-search)
 8. [Endpoint Summary](#8-endpoint-summary)
 
@@ -613,25 +613,25 @@ List all of the current user's tags with usage counts. **Requires authentication
 
 ## 5. F4: Notes
 
+Short insight annotations linked to papers (max 1000 characters). Each paper can have multiple notes.
+
 ### 5.1 POST /api/notes
 
-Create a research note, optionally linked to a paper. **Requires authentication.**
+Create an insight note linked to a paper. **Requires authentication.**
 
 **Request Body:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `title` | string | Yes | Note title |
-| `content` | string | Yes | Note content (Markdown supported) |
-| `paper_id` | string | No | arXiv ID to link the note to |
+| `paper_id` | string | Yes | arXiv ID to link the note to |
+| `content` | string | Yes | Insight content (max 1000 characters) |
 
 **Example Request:**
 
 ```json
 {
   "paper_id": "2403.12345",
-  "title": "Multi-Scale Attention Notes",
-  "content": "## Key Ideas\n\n- Proposes a hierarchical attention mechanism..."
+  "content": "The paper shows multi-head attention can be pruned without significant performance loss."
 }
 ```
 
@@ -641,15 +641,17 @@ Create a research note, optionally linked to a paper. **Requires authentication.
 {
   "data": {
     "id": 1,
-    "paper_id": "2403.12345",
-    "title": "Multi-Scale Attention Notes",
-    "content": "## Key Ideas\n\n- Proposes a hierarchical attention mechanism...",
+    "user_id": 1,
+    "paper_id": 2,
+    "arxiv_id": "2403.12345",
+    "content": "The paper shows multi-head attention can be pruned without significant performance loss.",
+    "preview": "The paper shows multi-head attention can be pruned without significant performance loss.",
     "created_at": "2026-04-03T15:00:00",
     "updated_at": "2026-04-03T15:00:00",
+    "paper_title": "Efficient Vision Transformers with Multi-Scale Attention",
     "_links": {
       "self": "/api/notes/1",
-      "paper": "/api/papers/2403.12345",
-      "flashcards": "/api/notes/1/flashcards"
+      "paper": "/api/papers/2403.12345"
     }
   }
 }
@@ -659,7 +661,7 @@ Create a research note, optionally linked to a paper. **Requires authentication.
 
 | Code | Condition |
 |------|-----------|
-| 400 | Missing `title` or `content` |
+| 400 | Missing `paper_id` or `content`, or content exceeds 1000 characters |
 | 401 | Missing or invalid JWT token |
 | 404 | Paper with given `paper_id` not found |
 
@@ -684,16 +686,17 @@ List all notes for the current user. **Requires authentication.**
   "data": [
     {
       "id": 1,
-      "paper_id": "2403.12345",
-      "paper_title": "Efficient Vision Transformers...",
-      "title": "Multi-Scale Attention Notes",
-      "content": "## Key Ideas\n\n- ...",
+      "user_id": 1,
+      "paper_id": 2,
+      "arxiv_id": "2403.12345",
+      "content": "The paper shows multi-head attention can be pruned...",
+      "preview": "The paper shows multi-head attention can be pruned...",
       "created_at": "2026-04-03T15:00:00",
       "updated_at": "2026-04-03T15:00:00",
+      "paper_title": "Efficient Vision Transformers...",
       "_links": {
         "self": "/api/notes/1",
-        "paper": "/api/papers/2403.12345",
-        "flashcards": "/api/notes/1/flashcards"
+        "paper": "/api/papers/2403.12345"
       }
     }
   ],
@@ -741,26 +744,7 @@ Retrieve a single note. **Requires authentication.**
 |-----------|------|-------------|
 | `id` | integer | Note ID |
 
-**Success Response (200 OK):**
-
-```json
-{
-  "data": {
-    "id": 1,
-    "paper_id": "2403.12345",
-    "paper_title": "Efficient Vision Transformers...",
-    "title": "Multi-Scale Attention Notes",
-    "content": "## Key Ideas\n\n- Proposes a hierarchical attention mechanism...",
-    "created_at": "2026-04-03T15:00:00",
-    "updated_at": "2026-04-03T15:00:00",
-    "_links": {
-      "self": "/api/notes/1",
-      "paper": "/api/papers/2403.12345",
-      "flashcards": "/api/notes/1/flashcards"
-    }
-  }
-}
-```
+**Success Response (200 OK):** Same format as individual note in `POST /api/notes` response.
 
 **Error Responses:**
 
@@ -774,7 +758,7 @@ Retrieve a single note. **Requires authentication.**
 
 ### 5.5 PUT /api/notes/{id}
 
-Update a note. **Requires authentication.**
+Update a note's content. **Requires authentication.**
 
 **Path Parameters:**
 
@@ -782,19 +766,17 @@ Update a note. **Requires authentication.**
 |-----------|------|-------------|
 | `id` | integer | Note ID |
 
-**Request Body (all fields optional):**
+**Request Body:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `title` | string | Updated title |
-| `content` | string | Updated content |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content` | string | No | Updated insight content (max 1000 characters) |
 
 **Example Request:**
 
 ```json
 {
-  "title": "Updated Title",
-  "content": "Updated content with new insights..."
+  "content": "Updated findings after reading the supplementary material."
 }
 ```
 
@@ -804,7 +786,7 @@ Update a note. **Requires authentication.**
 
 | Code | Condition |
 |------|-----------|
-| 400 | Empty request body |
+| 400 | Empty request body or content exceeds 1000 characters |
 | 401 | Missing or invalid JWT token |
 | 403 | Note belongs to another user |
 | 404 | Note not found |
@@ -813,7 +795,7 @@ Update a note. **Requires authentication.**
 
 ### 5.6 DELETE /api/notes/{id}
 
-Delete a note and its associated flashcards. **Requires authentication.**
+Delete a note. **Requires authentication.**
 
 **Path Parameters:**
 
@@ -823,7 +805,7 @@ Delete a note and its associated flashcards. **Requires authentication.**
 
 **Success Response (204 No Content):** Empty body.
 
-Note: Deleting a note also cascade-deletes all linked flashcards and removes the note's vector from ChromaDB.
+Note: Deleting a note also removes the note's vector from ChromaDB.
 
 **Error Responses:**
 
@@ -835,174 +817,22 @@ Note: Deleting a note also cascade-deletes all linked flashcards and removes the
 
 ---
 
-## 6. F5: Flashcards & Spaced Repetition
+## 6. F5: Recommendations & Discovery
 
-### 6.1 POST /api/flashcards
+### 6.1 GET /api/recommendations/daily
 
-Create a flashcard linked to a note. **Requires authentication.**
+Get personalized daily paper recommendations. **Requires authentication.**
 
-**Request Body:**
+The system automatically selects the appropriate strategy:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `note_id` | integer | Yes | ID of the parent note |
-| `question` | string | Yes | Flashcard question |
-| `answer` | string | Yes | Flashcard answer |
+| Strategy | Condition | Method |
+|----------|-----------|--------|
+| `cold_start` | User has no saved papers | Trending papers from `preferred_categories` |
+| `warm_start` | User has saved papers | 70% ChromaDB similarity + 30% category freshness |
 
-**Example Request:**
+Already-saved papers are excluded from recommendations.
 
-```json
-{
-  "note_id": 1,
-  "question": "What is Multi-Head Attention?",
-  "answer": "A mechanism that runs multiple attention functions in parallel, allowing the model to attend to information from different representation subspaces."
-}
-```
-
-**Success Response (201 Created):**
-
-```json
-{
-  "data": {
-    "id": 1,
-    "note_id": 1,
-    "question": "What is Multi-Head Attention?",
-    "answer": "A mechanism that runs multiple attention functions in parallel...",
-    "ease_factor": 2.5,
-    "interval": 1,
-    "repetitions": 0,
-    "next_review_at": "2026-04-04T15:00:00",
-    "created_at": "2026-04-03T15:00:00",
-    "_links": {
-      "self": "/api/flashcards/1",
-      "note": "/api/notes/1",
-      "review": "/api/flashcards/1/review"
-    }
-  }
-}
-```
-
-**Error Responses:**
-
-| Code | Condition |
-|------|-----------|
-| 400 | Missing required fields |
-| 401 | Missing or invalid JWT token |
-| 403 | Note does not belong to the current user |
-| 404 | Note not found |
-
----
-
-### 6.2 GET /api/flashcards
-
-List all flashcards for the current user. **Requires authentication.**
-
-**Query Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `note_id` | integer | No | Filter by note ID |
-| `page` | integer | No | Page number (default 1) |
-| `per_page` | integer | No | Items per page (default 20, max 100) |
-
-**Success Response (200 OK):** Paginated list of flashcards.
-
-**Error Responses:**
-
-| Code | Condition |
-|------|-----------|
-| 401 | Missing or invalid JWT token |
-
----
-
-### 6.3 GET /api/notes/{id}/flashcards
-
-List flashcards for a specific note. **Requires authentication.**
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | integer | Note ID |
-
-**Success Response (200 OK):** Paginated list of flashcards (same format as `GET /api/flashcards`).
-
-**Error Responses:**
-
-| Code | Condition |
-|------|-----------|
-| 401 | Missing or invalid JWT token |
-| 403 | Note does not belong to the current user |
-| 404 | Note not found |
-
----
-
-### 6.4 PUT /api/flashcards/{id}
-
-Update a flashcard's question or answer. **Requires authentication.**
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | integer | Flashcard ID |
-
-**Request Body (all fields optional):**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `question` | string | Updated question |
-| `answer` | string | Updated answer |
-
-**Example Request:**
-
-```json
-{
-  "question": "What are the components of Multi-Head Attention?",
-  "answer": "Query, Key, and Value projections run through multiple parallel attention heads."
-}
-```
-
-**Success Response (200 OK):** Returns the updated flashcard.
-
-**Error Responses:**
-
-| Code | Condition |
-|------|-----------|
-| 400 | Empty request body |
-| 401 | Missing or invalid JWT token |
-| 403 | Flashcard does not belong to the current user |
-| 404 | Flashcard not found |
-
----
-
-### 6.5 DELETE /api/flashcards/{id}
-
-Delete a flashcard. **Requires authentication.**
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | integer | Flashcard ID |
-
-**Success Response (204 No Content):** Empty body.
-
-**Error Responses:**
-
-| Code | Condition |
-|------|-----------|
-| 401 | Missing or invalid JWT token |
-| 403 | Flashcard does not belong to the current user |
-| 404 | Flashcard not found |
-
----
-
-### 6.6 GET /api/flashcards/due
-
-Get flashcards due for review today. **Requires authentication.**
-
-Returns all flashcards where `next_review_at` is in the past.
+**Query Parameters:** None.
 
 **Success Response (200 OK):**
 
@@ -1010,82 +840,26 @@ Returns all flashcards where `next_review_at` is in the past.
 {
   "data": [
     {
-      "id": 1,
-      "question": "What is Multi-Head Attention?",
-      "answer": "A mechanism that...",
-      "note_id": 1,
-      "ease_factor": 2.5,
-      "interval": 1,
-      "repetitions": 0,
-      "next_review_at": "2026-04-04T15:00:00",
+      "arxiv_id": "2604.05678",
+      "title": "Scaling Vision Transformers with Multi-Head Attention",
+      "authors": ["Alice Smith"],
+      "abstract": "We investigate scaling laws for...",
+      "categories": "cs.CV cs.AI",
+      "published_date": "2026-04-14",
+      "arxiv_url": "https://arxiv.org/abs/2604.05678",
+      "pdf_url": "https://arxiv.org/pdf/2604.05678",
       "_links": {
-        "self": "/api/flashcards/1",
-        "review": "/api/flashcards/1/review",
-        "note": "/api/notes/1"
+        "self": "/api/papers/2604.05678",
+        "save": "/api/papers/2604.05678/save",
+        "notes": "/api/papers/2604.05678/notes"
       }
     }
   ],
-  "total_due": 5
-}
-```
-
-**Error Responses:**
-
-| Code | Condition |
-|------|-----------|
-| 401 | Missing or invalid JWT token |
-
----
-
-### 6.7 POST /api/flashcards/{id}/review
-
-Submit a review rating for a flashcard. The SM-2 spaced repetition algorithm updates the card's scheduling parameters. **Requires authentication.**
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `id` | integer | Flashcard ID |
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `rating` | integer | Yes | Score from 0 to 5 (0 = forgot completely, 5 = perfect recall) |
-
-**SM-2 Rating Scale:**
-
-| Rating | Meaning |
-|--------|---------|
-| 0 | Complete blackout |
-| 1 | Incorrect, but recognised the answer |
-| 2 | Incorrect, but the answer seemed easy to recall |
-| 3 | Correct with significant difficulty |
-| 4 | Correct with some hesitation |
-| 5 | Perfect recall |
-
-**Example Request:**
-
-```json
-{
-  "rating": 4
-}
-```
-
-**Success Response (200 OK):**
-
-```json
-{
-  "data": {
-    "flashcard_id": 1,
-    "rating": 4,
-    "updated": {
-      "ease_factor": 2.5,
-      "interval": 6,
-      "repetitions": 2,
-      "next_review_at": "2026-04-09T15:00:00"
-    },
-    "reviewed_at": "2026-04-03T20:00:00"
+  "strategy": "cold_start",
+  "count": 5,
+  "_links": {
+    "self": "/api/recommendations/daily",
+    "profile": "/api/users/me"
   }
 }
 ```
@@ -1094,51 +868,62 @@ Submit a review rating for a flashcard. The SM-2 spaced repetition algorithm upd
 
 | Code | Condition |
 |------|-----------|
-| 400 | Rating is not an integer between 0 and 5 |
+| 400 | Cold start with no `preferred_categories` set — user must update profile first |
 | 401 | Missing or invalid JWT token |
-| 403 | Flashcard does not belong to the current user |
-| 404 | Flashcard not found |
 
 ---
 
-### 6.8 GET /api/review/stats
+### 6.2 GET /api/papers/discover
 
-Get spaced repetition review statistics. **Requires authentication.**
+Random paper discovery in an arXiv category for serendipitous browsing. **No authentication required.**
+
+Fetches a batch of recent papers and returns a random subset.
 
 **Query Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `period` | string | No | Time period: `week` (default), `month`, or `all` |
+| `category` | string | Yes | arXiv category (e.g. `cs.CV`) |
+| `days` | integer | No | Lookback period in days (default 7) |
+| `count` | integer | No | Number of papers to return (default 5, max 10) |
+
+**Example Request:**
+
+```
+GET /api/papers/discover?category=cs.AI&count=3
+```
 
 **Success Response (200 OK):**
 
 ```json
 {
-  "data": {
-    "total_cards": 25,
-    "due_today": 5,
-    "mastered": 12,
-    "learning": 13,
-    "reviews_in_period": 42,
-    "average_rating": 3.8,
-    "daily_reviews": [
-      { "date": "2026-04-01", "count": 8, "avg_rating": 3.5 },
-      { "date": "2026-04-02", "count": 12, "avg_rating": 4.0 },
-      { "date": "2026-04-03", "count": 22, "avg_rating": 3.9 }
-    ]
-  }
+  "data": [
+    {
+      "arxiv_id": "2604.01234",
+      "title": "Efficient Retrieval-Augmented Generation",
+      "authors": ["Bob Lee"],
+      "abstract": "We propose a novel retrieval mechanism...",
+      "categories": "cs.AI",
+      "published_date": "2026-04-15",
+      "arxiv_url": "https://arxiv.org/abs/2604.01234",
+      "pdf_url": "https://arxiv.org/pdf/2604.01234",
+      "_links": {
+        "self": "/api/papers/2604.01234",
+        "save": "/api/papers/2604.01234/save",
+        "notes": "/api/papers/2604.01234/notes"
+      }
+    }
+  ],
+  "category": "cs.AI",
+  "count": 3
 }
 ```
-
-- `mastered`: Cards with `ease_factor >= 2.5` and `interval >= 21` days.
-- `learning`: All other cards (`total_cards - mastered`).
 
 **Error Responses:**
 
 | Code | Condition |
 |------|-----------|
-| 401 | Missing or invalid JWT token |
+| 400 | Missing `category` parameter |
 
 ---
 
@@ -1227,9 +1012,9 @@ Notes are isolated by user — each user can only search their own notes.
   "data": [
     {
       "id": 3,
-      "title": "Data Augmentation Survey Notes",
-      "content": "## Summary\n\n- ...",
-      "paper_id": "2403.67890",
+      "preview": "Data augmentation techniques improve model generalisation by introducing...",
+      "content": "Data augmentation techniques improve model generalisation by introducing transformations during training...",
+      "arxiv_id": "2403.67890",
       "relevance_score": 0.92,
       "type": "note",
       "_links": {
@@ -1280,8 +1065,9 @@ Combined semantic search across both papers and notes, merged and sorted by rele
     {
       "type": "note",
       "id": 1,
-      "title": "Multi-Scale Attention Notes",
-      "content": "Proposes a hierarchical attention mechanism...",
+      "preview": "Proposes a hierarchical attention mechanism...",
+      "content": "Proposes a hierarchical attention mechanism that captures both local and global features...",
+      "arxiv_id": "2403.12345",
       "relevance_score": 0.94,
       "_links": { "self": "/api/notes/1" }
     },
@@ -1333,16 +1119,10 @@ Results are sorted by `relevance_score` in descending order. The `type` field in
 | | GET | `/api/notes/{id}` | Yes |
 | | PUT | `/api/notes/{id}` | Yes |
 | | DELETE | `/api/notes/{id}` | Yes |
-| **F5** | POST | `/api/flashcards` | Yes |
-| | GET | `/api/flashcards` | Yes |
-| | GET | `/api/notes/{id}/flashcards` | Yes |
-| | PUT | `/api/flashcards/{id}` | Yes |
-| | DELETE | `/api/flashcards/{id}` | Yes |
-| | GET | `/api/flashcards/due` | Yes |
-| | POST | `/api/flashcards/{id}/review` | Yes |
-| | GET | `/api/review/stats` | Yes |
+| **F5** | GET | `/api/recommendations/daily` | Yes |
+| | GET | `/api/papers/discover` | No |
 | **F6** | POST | `/api/search/papers` | No |
 | | POST | `/api/search/notes` | Yes |
 | | POST | `/api/search/all` | Yes |
 
-**Total: 30 endpoints** (7 public + 1 optional auth + 22 authenticated)
+**Total: 24 endpoints** (7 public + 1 optional auth + 16 authenticated)

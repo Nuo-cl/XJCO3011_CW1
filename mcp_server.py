@@ -40,6 +40,71 @@ def _chromadb():
 
 
 @mcp.tool()
+def register_user(username: str, email: str, password: str) -> str:
+    """Register a new user account and switch to it.
+
+    Args:
+        username: Unique username (max 80 characters).
+        email: Unique email address.
+        password: Password (min 6 characters).
+    """
+    with _get_app().app_context():
+        global _user_id
+
+        if not username or not email or not password:
+            return json.dumps({'error': 'username, email, and password are all required.'})
+        if len(password) < 6:
+            return json.dumps({'error': 'Password must be at least 6 characters.'})
+
+        if User.query.filter_by(username=username).first():
+            return json.dumps({'error': f'Username "{username}" is already taken.'})
+        if User.query.filter_by(email=email).first():
+            return json.dumps({'error': f'Email "{email}" is already registered.'})
+
+        user = User(username=username, email=email)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        _user_id = user.id
+        return json.dumps({
+            'message': f'User "{username}" registered. Now operating as user {user.id}.',
+            'user_id': user.id,
+            'username': username,
+        })
+
+
+@mcp.tool()
+def update_profile(preferred_categories: str = None, email: str = None) -> str:
+    """Update the current user's profile.
+
+    Args:
+        preferred_categories: Comma-separated arXiv categories (e.g. "cs.AI,cs.CV,cs.CL").
+        email: New email address.
+    """
+    with _get_app().app_context():
+        user = db.session.get(User, _user_id)
+        if not user:
+            return json.dumps({'error': 'Current user not found.'})
+
+        if preferred_categories is not None:
+            cats = [c.strip() for c in preferred_categories.split(',') if c.strip()]
+            user.preferred_categories = cats
+
+        if email is not None:
+            existing = User.query.filter(User.email == email, User.id != user.id).first()
+            if existing:
+                return json.dumps({'error': f'Email "{email}" is already registered.'})
+            user.email = email
+
+        db.session.commit()
+        return json.dumps({
+            'message': 'Profile updated.',
+            'profile': user.to_dict(),
+        })
+
+
+@mcp.tool()
 def search_papers(query: str, category: str = None, days: int = 30) -> str:
     """Search arXiv for papers by keyword and optional category.
 
@@ -269,19 +334,52 @@ def get_daily_recommendations() -> str:
             return json.dumps({'error': 'User not found.'})
 
         try:
-            papers, strategy = RecommendationService.daily_recommendations(
+            papers, strategy, meta = RecommendationService.daily_recommendations(
                 user=user,
                 chromadb_service=_chromadb(),
             )
         except Exception as e:
-            return json.dumps({'error': str(e)})
+            error_msg = str(e)
+            # Hint: no preferred categories configured
+            if 'preferred_categories' in error_msg:
+                return json.dumps({
+                    'error': error_msg,
+                    'hint': 'The user has no preferred categories set and no saved papers. '
+                            'Ask which arXiv categories interest them (e.g. cs.AI, cs.CV, '
+                            'cs.CL), then update their profile via PUT /api/users/me with '
+                            '{"preferred_categories": ["cs.AI"]}.',
+                    'action_required': 'set_preferred_categories',
+                })
+            return json.dumps({'error': error_msg})
 
         results = [p.to_dict() for p in papers]
-        return json.dumps({
+        saved_count = meta.get('saved_count', 0)
+
+        # Build contextual hint based on scenario
+        hint = None
+        if not results:
+            hint = ('No papers found matching the current criteria. '
+                    'This may happen when arXiv has limited recent publications '
+                    'in the selected categories. Try discover_papers with a '
+                    'broader category or longer time window.')
+        elif strategy == 'cold_start':
+            hint = ('Cold-start recommendations are based on preferred categories only. '
+                    'Saving papers to the library (via save_paper) will unlock '
+                    'personalized similarity-based recommendations in future calls.')
+        elif strategy == 'warm_start' and saved_count < 5:
+            hint = (f'Recommendations are based on {saved_count} saved paper(s). '
+                    'Saving more papers across different topics will improve '
+                    'recommendation diversity and relevance.')
+
+        response = {
             'strategy': strategy,
             'count': len(results),
             'data': results,
-        }, indent=2)
+        }
+        if hint:
+            response['hint'] = hint
+
+        return json.dumps(response, indent=2)
 
 
 @mcp.tool()
@@ -293,14 +391,28 @@ def discover_papers(category: str, days: int = 7) -> str:
         days: Look back window in days. Default 7.
     """
     with _get_app().app_context():
+        requested_count = 5
         papers = RecommendationService.discover_random(
             category=category,
             days=days,
-            count=5,
+            count=requested_count,
             chromadb_service=_chromadb(),
         )
         results = [p.to_dict() for p in papers]
-        return json.dumps(results, indent=2)
+
+        response = {'count': len(results), 'category': category, 'data': results}
+
+        if len(results) == 0:
+            response['hint'] = (
+                f'No papers found in {category} for the last {days} day(s). '
+                'Try a broader category or increase the days parameter.')
+        elif len(results) < requested_count:
+            response['hint'] = (
+                f'Only {len(results)} paper(s) found (requested {requested_count}). '
+                f'arXiv may have limited recent publications in {category} '
+                f'over the last {days} day(s). Consider increasing days.')
+
+        return json.dumps(response, indent=2)
 
 
 if __name__ == '__main__':
