@@ -36,6 +36,9 @@ docs/*.json
 docs/*.py
 docs/*.png
 docs/*.docx
+docs/*.html
+docs/*.js
+docs/*.mp4
 
 # Resources - source files
 # resources/ is tracked (logo needed for README)
