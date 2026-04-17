@@ -1,16 +1,43 @@
-# ScholarTrack
+<p align="center">
+  <img src="resources/logo.png" alt="ScholarTrack Logo" width="180" />
+</p>
 
-A RESTful Web API for researchers to discover and track arXiv papers, record insights, and get personalized recommendations. Built with Flask for the XJCO3011 Web Services and Web Data coursework.
+<h1 align="center">ScholarTrack</h1>
+
+<p align="center">
+  A RESTful Web API for researchers to discover and track arXiv papers, record insights, and get personalized recommendations.<br/>
+  Built with Flask for the XJCO3011 Web Services and Web Data coursework.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white" alt="Python 3.11" />
+  <img src="https://img.shields.io/badge/flask-3.1.1-lightgrey?logo=flask" alt="Flask 3.1.1" />
+  <img src="https://img.shields.io/badge/tests-60%20passed-brightgreen" alt="Tests" />
+  <img src="https://img.shields.io/badge/coverage-80%25-green" alt="Coverage" />
+</p>
 
 ## Features
 
-- **Authentication (F1)** — Register, login, JWT-based access control
-- **Paper Discovery (F2)** — Search arXiv, browse trending papers, random discovery
-- **Paper Management (F3)** — Save papers to a personal library with tags and memos
-- **Insight Notes (F4)** — Short annotations linked to papers (max 1000 chars)
-- **Recommendations (F5)** — Personalized daily paper recommendations (cold/warm start)
-- **RAG Semantic Search (F6)** — Vector search over paper abstracts and notes via ChromaDB
-- **MCP Server (F7)** — AI assistant integration through the Model Context Protocol
+### Authentication (F1)
+Register an account, log in with JWT tokens, and manage your researcher profile including preferred arXiv categories (e.g., `cs.AI`, `cs.CV`). Preferred categories drive the recommendation engine.
+
+### Paper Discovery (F2)
+Search arXiv papers by keyword, category, and date range. Browse trending papers in any arXiv category, or use the **discover** endpoint for serendipitous browsing — random papers from a chosen field to spark new research directions.
+
+### Paper Management (F3)
+Save interesting papers to your personal library with optional memos. Organize them using **user-scoped tags** — each user can tag the same paper differently. Filter your library by tag, and manage tags independently.
+
+### Insight Notes (F4)
+Record short insight annotations (max 1000 characters) linked to specific papers. Notes capture key takeaways, critiques, or ideas as you read. Each paper can have multiple notes, and notes are searchable via semantic search.
+
+### Personalized Recommendations (F5)
+Get daily paper recommendations tailored to your interests. New users receive **trending papers** from preferred categories (cold start). As you save papers, the engine switches to a **hybrid model**: 70% semantic similarity to your library + 30% fresh papers from active categories, with already-saved papers excluded.
+
+### RAG Semantic Search (F6)
+Search across paper abstracts and your personal notes using natural language queries. The system uses **ChromaDB** with all-MiniLM-L6-v2 embeddings for vector similarity. Search papers globally, search notes privately (user-isolated), or search both simultaneously with merged relevance ranking.
+
+### MCP Server (F7)
+Integrate ScholarTrack with AI assistants (e.g., Claude) via the **Model Context Protocol**. The MCP server exposes 11 tools that let AI assistants search papers, manage your library, create notes, and get recommendations — all through natural conversation.
 
 ## Tech Stack
 
@@ -19,6 +46,7 @@ A RESTful Web API for researchers to discover and track arXiv papers, record ins
 | Framework | Flask 3.1.1 |
 | Database | SQLite + SQLAlchemy 2.0 |
 | Authentication | JWT (flask-jwt-extended) |
+| Rate Limiting | Flask-Limiter |
 | Vector Search | ChromaDB 1.0.7 |
 | External API | arXiv Python client |
 | API Documentation | Flasgger (Swagger/OpenAPI) |
@@ -70,6 +98,8 @@ ScholarTrack includes an MCP (Model Context Protocol) server that exposes core f
 
 | Tool | Description |
 |------|-------------|
+| `register_user` | Register a new account and switch to it |
+| `update_profile` | Update preferred categories or email |
 | `search_papers` | Search arXiv by keyword, category, and time range |
 | `get_trending_papers` | Get recent trending papers in an arXiv category |
 | `get_daily_recommendations` | Personalized daily paper recommendations |
@@ -173,7 +203,7 @@ app/
 ├── models/              # SQLAlchemy models (6 tables)
 ├── routes/              # API endpoints (5 Blueprint modules)
 ├── services/            # Business logic (arXiv, ChromaDB, recommendations)
-└── utils/               # Error handling, pagination, validation
+└── utils/               # Error handling, validation
 tests/                   # pytest test suite
 docs/                    # Design specs and API documentation
 mcp_server.py            # MCP server for AI assistants

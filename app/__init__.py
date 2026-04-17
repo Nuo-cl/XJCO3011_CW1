@@ -2,12 +2,15 @@ from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flasgger import Flasgger
 
 from app.config import DevelopmentConfig, TestingConfig, ProductionConfig
 
 db = SQLAlchemy()
 jwt = JWTManager()
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
 
 config_map = {
     'development': DevelopmentConfig,
@@ -22,6 +25,7 @@ def create_app(config_name='development'):
 
     db.init_app(app)
     jwt.init_app(app)
+    limiter.init_app(app)
     CORS(app)
     Flasgger(app)
 

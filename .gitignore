@@ -8,6 +8,7 @@ __pycache__/
 
 # Database
 *.db
+instance/
 
 # ChromaDB
 chroma_data/
@@ -24,3 +25,17 @@ CLAUDE.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Conversation logs
+*.txt
+!requirements.txt
+
+# Docs - internal/dev files (keep only PDFs and PPTX for submission)
+docs/*.md
+docs/*.json
+docs/*.py
+docs/*.png
+docs/*.docx
+
+# Resources - source files
+# resources/ is tracked (logo needed for README)

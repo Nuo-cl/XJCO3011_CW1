@@ -36,6 +36,7 @@ class TestingConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = 'sqlite://'
     TESTING = True
     CHROMADB_PERSIST = False
+    RATELIMIT_ENABLED = False
 
 
 class ProductionConfig(BaseConfig):

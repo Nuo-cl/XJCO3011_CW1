@@ -76,6 +76,13 @@ def register_error_handlers(app):
             'message': e.description if hasattr(e, 'description') else 'Resource conflict.',
         }), 409
 
+    @app.errorhandler(429)
+    def rate_limit_exceeded(e):
+        return jsonify({
+            'error': 'too_many_requests',
+            'message': 'Rate limit exceeded. Please try again later.',
+        }), 429
+
     @app.errorhandler(500)
     def internal_error(e):
         return jsonify({
